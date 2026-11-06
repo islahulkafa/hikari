@@ -13,8 +13,6 @@ class GetApplicationRelease(
 
         // Check if latest version is different from current version
         val isNewVersion = isNewVersion(
-            arguments.isNightly,
-            arguments.commitCount,
             arguments.versionName,
             release.version,
         )
@@ -25,38 +23,27 @@ class GetApplicationRelease(
     }
 
     private fun isNewVersion(
-        isNightly: Boolean,
-        commitCount: Int,
         versionName: String,
         versionTag: String,
     ): Boolean {
         // Removes prefixes like "r" or "v"
         val newVersion = versionTag.replace("[^\\d.]".toRegex(), "")
-        return if (isNightly) {
-            // Nightly builds: based on preview releases
-            // tagged as something like "r1234"
-            newVersion.toInt() > commitCount
-        } else {
-            // Release builds: based on stable releases
-            // tagged as something like "v0.1.2"
-            val oldVersion = versionName.replace("[^\\d.]".toRegex(), "")
+        val oldVersion = versionName.replace("[^\\d.]".toRegex(), "")
 
-            val newSemVer = newVersion.split(".").map { it.toInt() }
-            val oldSemVer = oldVersion.split(".").map { it.toInt() }
+        val newSemVer = newVersion.split(".").map { it.toInt() }
+        val oldSemVer = oldVersion.split(".").map { it.toInt() }
 
-            oldSemVer.mapIndexed { index, i ->
-                if (newSemVer[index] > i) {
-                    return true
-                }
+        oldSemVer.mapIndexed { index, i ->
+            if (newSemVer[index] > i) {
+                return true
             }
-
-            false
         }
+
+        return false
     }
 
     data class Arguments(
         val isFoss: Boolean,
-        val isNightly: Boolean,
         val commitCount: Int,
         val versionName: String,
         val repository: String,

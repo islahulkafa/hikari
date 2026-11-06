@@ -34,10 +34,13 @@ object WebViewUtil {
      *   Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.3
      */
     fun getInferredUserAgent(context: Context): String {
-        return WebView(context)
-            .getDefaultUserAgentString()
-            .replace("; Android .*?\\)".toRegex(), "; Android 10; K)")
-            .replace("Version/.* Chrome/".toRegex(), "Chrome/")
+        return runCatching {
+            WebSettings.getDefaultUserAgent(context)
+                .replace("; Android .*?\\)".toRegex(), "; Android 10; K)")
+                .replace("Version/.* Chrome/".toRegex(), "Chrome/")
+        }.getOrDefault(
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        )
     }
 
     fun getVersion(context: Context): String {

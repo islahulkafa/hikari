@@ -45,7 +45,6 @@ import app.hikari.ui.more.NewUpdateScreen
 import app.hikari.util.lang.toDateTimestampString
 import app.hikari.util.system.copyToClipboard
 import app.hikari.util.system.isFossBuildType
-import app.hikari.util.system.isNightlyBuildType
 import app.hikari.util.system.toast
 import app.hikari.util.system.updaterEnabled
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -224,15 +223,6 @@ object AboutScreen : Screen() {
                         "$it (${getFormattedBuildTime()})"
                     } else {
                         it
-                    }
-                }
-            }
-            isNightlyBuildType -> {
-                "Nightly r${BuildConfig.COMMIT_COUNT}".let {
-                    if (withBuildDate) {
-                        "$it (${BuildConfig.COMMIT_SHA}, ${getFormattedBuildTime()})"
-                    } else {
-                        "$it (${BuildConfig.COMMIT_SHA})"
                     }
                 }
             }

@@ -56,6 +56,7 @@ fun extensionsTab(
                     }
                 },
                 onClickItemCancel = extensionsViewModel::cancelInstallUpdateExtension,
+                onClickCancelBatchUpdate = extensionsViewModel::cancelBatchUpdate,
                 onClickUpdateAll = extensionsViewModel::updateAllExtensions,
                 onOpenWebView = { extension ->
                     extension.sources.getOrNull(0)?.let {

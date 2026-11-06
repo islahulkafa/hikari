@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.hikari.core.common.i18n.stringResource
 import app.hikari.domain.extension.interactor.GetExtensionsByType
 import app.hikari.domain.source.service.SourcePreferences
 import app.hikari.extension.ExtensionManager
@@ -13,12 +14,15 @@ import app.hikari.i18n.MR
 import app.hikari.i18n.StringResource
 import app.hikari.source.online.HttpSource
 import app.hikari.util.system.LocaleHelper
+import app.hikari.util.system.toast
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +40,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -50,6 +55,9 @@ class ExtensionsViewModel(
 ) : ViewModel() {
 
     private val currentDownloads = MutableStateFlow<Map<String, InstallStep>>(hashMapOf())
+    private val batchUpdateProgress = MutableStateFlow<BatchUpdateProgress?>(null)
+    private var batchUpdateJob: Job? = null
+    private var currentBatchExtension: Extension.Installed? = null
 
     // Public so BrowseTab's search bar can observe it without subscribing to the whole state.
     val searchQuery: StateFlow<String?>
@@ -111,13 +119,15 @@ class ExtensionsViewModel(
         searchQuery,
         isRefreshing,
         preferences.extensionUpdatesCount.changes(),
-    ) { items, searchQuery, isRefreshing, updates ->
+        batchUpdateProgress,
+    ) { items, searchQuery, isRefreshing, updates, batchProgress ->
         State(
             isLoading = items == null,
             isRefreshing = isRefreshing,
             items = items.orEmpty(),
             updates = updates,
             searchQuery = searchQuery,
+            batchUpdateProgress = batchProgress,
         )
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), State())
@@ -162,13 +172,72 @@ class ExtensionsViewModel(
     }
 
     fun updateAllExtensions() {
-        viewModelScope.launch(Dispatchers.IO) {
-            state.value.items.values.flatten()
-                .map { it.extension }
-                .filterIsInstance<Extension.Installed>()
-                .filter { it.hasUpdate }
-                .forEach(::updateExtension)
+        if (batchUpdateJob?.isActive == true) return
+
+        val toUpdate = state.value.items.values.flatten()
+            .map { it.extension }
+            .filterIsInstance<Extension.Installed>()
+            .filter { it.hasUpdate }
+
+        if (toUpdate.isEmpty()) return
+
+        batchUpdateJob = viewModelScope.launch(Dispatchers.IO) {
+            val total = toUpdate.size
+            var successful = 0
+            var failed = 0
+
+            try {
+                for ((index, extension) in toUpdate.withIndex()) {
+                    currentBatchExtension = extension
+                    batchUpdateProgress.value = BatchUpdateProgress(
+                        total = total,
+                        completed = index + 1,
+                        currentExtensionName = extension.name,
+                    )
+
+                    val success = try {
+                        extensionManager.updateExtension(extension)
+                            .collectToInstallUpdate(extension, failOnError = true)
+                        true
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        withContext(Dispatchers.Main) {
+                            context.toast(context.stringResource(MR.strings.ext_update_failed, extension.name))
+                        }
+                        false
+                    }
+
+                    if (success) {
+                        successful++
+                    } else {
+                        failed++
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (failed == 0) {
+                        context.toast(MR.strings.ext_update_all_success)
+                    } else {
+                        context.toast(context.stringResource(MR.strings.ext_update_all_partial, successful, total))
+                    }
+                }
+            } finally {
+                currentBatchExtension = null
+                batchUpdateProgress.value = null
+                batchUpdateJob = null
+            }
         }
+    }
+
+    fun cancelBatchUpdate() {
+        val currentExt = currentBatchExtension
+        if (currentExt != null) {
+            cancelInstallUpdateExtension(currentExt)
+        }
+        batchUpdateJob?.cancel()
+        batchUpdateJob = null
+        currentBatchExtension = null
+        batchUpdateProgress.value = null
     }
 
     fun installExtension(extension: Extension.Available) {
@@ -196,9 +265,17 @@ class ExtensionsViewModel(
         currentDownloads.update { it - extension.pkgName }
     }
 
-    private suspend fun Flow<InstallStep>.collectToInstallUpdate(extension: Extension) =
+    private suspend fun Flow<InstallStep>.collectToInstallUpdate(
+        extension: Extension,
+        failOnError: Boolean = false,
+    ) =
         this
-            .onEach { installStep -> addDownloadState(extension, installStep) }
+            .onEach { installStep ->
+                addDownloadState(extension, installStep)
+                if (failOnError && (installStep is InstallStep.Error || installStep is InstallStep.Idle)) {
+                    error("Installation failed for ${extension.name}")
+                }
+            }
             .takeWhile { installStep -> installStep != InstallStep.Installed }
             .onCompletion { removeDownloadState(extension) }
             .collect()
@@ -231,10 +308,18 @@ class ExtensionsViewModel(
         val items: ItemGroups = mutableMapOf(),
         val updates: Int = 0,
         val searchQuery: String? = null,
+        val batchUpdateProgress: BatchUpdateProgress? = null,
     ) {
         val isEmpty = items.isEmpty()
     }
 }
+
+@Immutable
+data class BatchUpdateProgress(
+    val total: Int,
+    val completed: Int,
+    val currentExtensionName: String,
+)
 
 typealias ItemGroups = Map<ExtensionUiModel.Header, List<ExtensionUiModel.Item>>
 

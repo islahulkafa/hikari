@@ -3,6 +3,7 @@ package app.hikari.presentation.webview
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.os.Message
+import android.webkit.CookieManager
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
 import android.webkit.RenderProcessGoneDetail
@@ -123,6 +124,7 @@ fun WebViewScreenContent(
 
             override fun onPageFinished(view: WebView, url: String?) {
                 super.onPageFinished(view, url)
+                CookieManager.getInstance().flush()
                 scope.launch {
                     val html = view.getHtml()
                     showCloudflareHelp = "window._cf_chl_opt" in html || "Ray ID is" in html
@@ -362,9 +364,13 @@ fun WebViewScreenContent(
                         WebView.setWebContentsDebuggingEnabled(true)
                     }
 
-                    webView.setUserAgent(headers["user-agent"] ?: defaultUserAgentProvider())
+                    val customUserAgent = headers.entries.firstOrNull {
+                        it.key.equals("user-agent", ignoreCase = true)
+                    }?.value
+                    webView.setUserAgent(customUserAgent ?: defaultUserAgentProvider())
                 },
                 onDispose = { webView ->
+                    CookieManager.getInstance().flush()
                     val window = windowStack.items.find { it.webView == webView }
                     if (window == null) {
                         // If we couldn't find any window on the stack that owns this WebView, it means that we can

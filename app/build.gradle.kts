@@ -65,7 +65,13 @@ android {
     buildTypes {
         val debug = getByName("debug") {
             applicationIdSuffix = ".dev"
+            isDebuggable = false
+            isProfileable = true
             isPseudoLocalesEnabled = true
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+            proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
         }
         val release = getByName("release") {
             isMinifyEnabled = true
@@ -89,13 +95,6 @@ android {
 
             matchingFallbacks.addAll(commonMatchingFallbacks)
         }
-        create("nightly") {
-            initWith(release)
-
-            applicationIdSuffix = ".debug"
-
-            matchingFallbacks.addAll(commonMatchingFallbacks)
-        }
         create("benchmark") {
             initWith(release)
 
@@ -107,7 +106,6 @@ android {
     }
 
     sourceSets {
-        getByName("nightly").res.directories.add("src/debug/res")
         getByName("benchmark").res.directories.add("src/debug/res")
     }
 
@@ -345,7 +343,7 @@ fun ApplicationVariant.buildConfigField(type: String, name: String, value: Provi
 
 androidComponents {
     onVariants { variant ->
-        val isUnstableBuild = variant.buildType == "debug" || variant.buildType == "nightly"
+        val isUnstableBuild = variant.buildType == "debug"
         val buildTime = if (isUnstableBuild) currentTime else latestCommitTime
 
         variant.buildConfigField("String", "COMMIT_COUNT", latestCommitCount.map { "\"$it\"" })
