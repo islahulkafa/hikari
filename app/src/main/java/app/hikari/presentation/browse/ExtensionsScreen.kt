@@ -50,6 +50,7 @@ import app.hikari.icons.materialsymbols.rounded.Refresh
 import app.hikari.icons.materialsymbols.rounded.Settings
 import app.hikari.icons.materialsymbols.rounded.VerifiedUser
 import app.hikari.presentation.browse.components.BaseBrowseItem
+import app.hikari.presentation.browse.components.BatchUpdateBanner
 import app.hikari.presentation.browse.components.ExtensionIcon
 import app.hikari.presentation.browse.components.ExtensionPill
 import app.hikari.presentation.browse.components.label
@@ -81,6 +82,7 @@ fun ExtensionScreen(
     searchQuery: String?,
     onLongClickItem: (Extension) -> Unit,
     onClickItemCancel: (Extension) -> Unit,
+    onClickCancelBatchUpdate: () -> Unit,
     onOpenWebView: (Extension.Available) -> Unit,
     onInstallExtension: (Extension.Available) -> Unit,
     onUninstallExtension: (Extension.Installed) -> Unit,
@@ -123,6 +125,7 @@ fun ExtensionScreen(
                     contentPadding = contentPadding,
                     onLongClickItem = onLongClickItem,
                     onClickItemCancel = onClickItemCancel,
+                    onClickCancelBatchUpdate = onClickCancelBatchUpdate,
                     onOpenWebView = onOpenWebView,
                     onInstallExtension = onInstallExtension,
                     onUninstallExtension = onUninstallExtension,
@@ -142,6 +145,7 @@ private fun ExtensionContent(
     contentPadding: PaddingValues,
     onLongClickItem: (Extension) -> Unit,
     onClickItemCancel: (Extension) -> Unit,
+    onClickCancelBatchUpdate: () -> Unit,
     onOpenWebView: (Extension.Available) -> Unit,
     onInstallExtension: (Extension.Available) -> Unit,
     onUninstallExtension: (Extension.Installed) -> Unit,
@@ -168,6 +172,18 @@ private fun ExtensionContent(
             }
         }
 
+        state.batchUpdateProgress?.let { progress ->
+            item(key = "batch-update-banner") {
+                BatchUpdateBanner(
+                    progress = progress,
+                    onCancel = onClickCancelBatchUpdate,
+                    modifier = Modifier
+                        .animateItem()
+                        .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+                )
+            }
+        }
+
         state.items.forEach { (header, items) ->
             item(
                 contentType = "header",
@@ -178,11 +194,18 @@ private fun ExtensionContent(
                         val action: @Composable RowScope.() -> Unit =
                             if (header.textRes == MR.strings.ext_updates_pending) {
                                 {
-                                    Button(onClick = { onClickUpdateAll() }) {
+                                    Button(
+                                        onClick = { onClickUpdateAll() },
+                                        enabled = state.batchUpdateProgress == null,
+                                    ) {
                                         Text(
                                             text = stringResource(MR.strings.ext_update_all),
                                             style = LocalTextStyle.current.copy(
-                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                color = if (state.batchUpdateProgress == null) {
+                                                    MaterialTheme.colorScheme.onPrimary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                                },
                                             ),
                                         )
                                     }

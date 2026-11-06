@@ -1,8 +1,10 @@
 package app.hikari.network
 
+import android.content.Context
 import app.hikari.core.common.preference.Preference
 import app.hikari.core.common.preference.PreferenceStore
 import app.hikari.core.metro.IsDebugBuild
+import app.hikari.util.system.WebViewUtil
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -12,6 +14,7 @@ import dev.zacsweers.metro.SingleIn
 class NetworkPreferences(
     preferenceStore: PreferenceStore,
     @IsDebugBuild isDebugBuild: Boolean,
+    context: Context,
 ) {
 
     val redactSensitiveHeaders: Preference<Boolean> = preferenceStore.getBoolean(
@@ -28,6 +31,12 @@ class NetworkPreferences(
 
     val defaultUserAgent: Preference<String> = preferenceStore.getString(
         "default_user_agent",
-        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        WebViewUtil.getInferredUserAgent(context),
     )
+
+    init {
+        if (defaultUserAgent.isSet() && defaultUserAgent.get().contains("Chrome/14")) {
+            defaultUserAgent.delete()
+        }
+    }
 }
