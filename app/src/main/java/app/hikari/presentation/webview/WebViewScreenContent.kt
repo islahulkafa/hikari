@@ -364,10 +364,7 @@ fun WebViewScreenContent(
                         WebView.setWebContentsDebuggingEnabled(true)
                     }
 
-                    val customUserAgent = headers.entries.firstOrNull {
-                        it.key.equals("user-agent", ignoreCase = true)
-                    }?.value
-                    webView.setUserAgent(customUserAgent ?: defaultUserAgentProvider())
+                    webView.setUserAgent(headers["user-agent"] ?: defaultUserAgentProvider())
                 },
                 onDispose = { webView ->
                     CookieManager.getInstance().flush()
